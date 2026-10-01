@@ -1,36 +1,42 @@
 package ir.bedehyar.app.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,336 +44,397 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import ir.bedehyar.app.data.DIRECTION_I_OWE
 import ir.bedehyar.app.ui.theme.CreditGreen
 import ir.bedehyar.app.ui.theme.DebtRed
-import ir.bedehyar.app.ui.theme.InkSecondary
+import ir.bedehyar.app.ui.theme.Vazir
+import ir.bedehyar.app.util.Fmt
 import ir.bedehyar.app.util.Jalali
-import java.util.Calendar
-import java.util.Locale
 
-/** Groups typed digits with commas while editing (e.g. 1,250,000). */
-object GroupingTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val digits = text.text.filter { it in '0'..'9' }
-        val formatted = if (digits.isEmpty()) "" else String.format(Locale.US, "%,d", digits.toLong())
+/* ------------------------------ scaffold ------------------------------ */
 
-        fun toTransformed(offset: Int): Int {
-            if (formatted.isEmpty()) return 0
-            var count = 0
-            var i = 0
-            val target = offset.coerceAtMost(digits.length)
-            while (i < formatted.length && count < target) {
-                if (formatted[i] != ',') count++
-                i++
-            }
-            return i
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppScaffold(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    actions: @Composable () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
+    bottomBar: @Composable () -> Unit = {},
+    floatingActionButton: @Composable () -> Unit = {},
+    content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "بازگشت"
+                            )
+                        }
+                    }
+                },
+                actions = { actions() }
+            )
+        },
+        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
+        bottomBar = bottomBar,
+        floatingActionButton = floatingActionButton
+    ) { padding ->
+        content(padding)
+    }
+}
+
+/* ------------------------------ states -------------------------------- */
+
+@Composable
+fun EmptyState(text: String, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.Inbox, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
-
-        fun toOriginal(offset: Int): Int {
-            var count = 0
-            var i = 0
-            while (i < offset && i < formatted.length) {
-                if (formatted[i] != ',') count++
-                i++
-            }
-            return count
-        }
-
-        return TransformedText(
-            AnnotatedString(formatted),
-            object : OffsetMapping {
-                override fun originalToTransformed(offset: Int): Int = toTransformed(offset)
-                override fun transformedToOriginal(offset: Int): Int = toOriginal(offset)
-            }
-        )
     }
 }
 
 @Composable
+fun LoadingBox(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+fun ErrorBox(text: String, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Filled.ErrorOutline, contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(text, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/* ------------------------------ dialogs ------------------------------- */
+
+@Composable
+fun ConfirmDialog(
+    title: String,
+    text: String,
+    confirmLabel: String = "تأیید",
+    danger: Boolean = false,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(text) },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = if (danger) androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ) else androidx.compose.material3.ButtonDefaults.textButtonColors()
+            ) { Text(confirmLabel) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
+    )
+}
+
+/* ------------------------------ inputs -------------------------------- */
+
+/** Amount field with live thousand-separator grouping and Persian-digit tolerance. */
+@Composable
 fun AmountField(
+    label: String,
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "مبلغ (تومان)",
+    supportingText: String? = null,
+    isError: Boolean = false,
     enabled: Boolean = true
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = { raw ->
-            val normalized = Jalali.normalizeDigits(raw).filter { it in '0'..'9' }.take(15)
-            onValueChange(normalized)
+            val digits = ir.bedehyar.app.util.Jalali.normalizeDigits(raw).filter { it.isDigit() }
+            if (digits.length <= 15) onValueChange(Fmt.groupDigits(digits))
         },
-        modifier = modifier.fillMaxWidth(),
         label = { Text(label) },
-        enabled = enabled,
+        modifier = modifier.fillMaxWidth(),
         singleLine = true,
-        visualTransformation = GroupingTransformation,
+        enabled = enabled,
+        isError = isError,
+        supportingText = supportingText?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
     )
 }
 
-/** Persian (Jalali) month-grid date picker. */
+/* ------------------------------ chips/badges --------------------------- */
+
 @Composable
-fun JalaliDatePickerDialog(
-    initialJy: Int,
-    initialJm: Int,
-    initialJd: Int,
-    onPick: (Int, Int, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var viewYear by remember { mutableStateOf(initialJy) }
-    var viewMonth by remember { mutableStateOf(initialJm) }
-    var selectedDay by remember { mutableStateOf<Int?>(initialJd) }
-
-    fun weekOffsetOf(jy: Int, jm: Int): Int {
-        val g = Jalali.toGregorian(jy, jm, 1)
-        val c = Calendar.getInstance()
-        c.clear()
-        c.set(g[0], g[1] - 1, g[2])
-        return Jalali.weekdayIndex(c.get(Calendar.DAY_OF_WEEK))
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                // Header: prev/next month + title
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = {
-                        if (viewMonth == 1) { viewMonth = 12; viewYear-- } else viewMonth--
-                    }) {
-                        Icon(Icons.Filled.KeyboardArrowRight, "ماه قبل")
-                    }
-                    Column(
-                        Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            Jalali.monthNames[viewMonth - 1],
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp
-                        )
-                        Text(
-                            Jalali.faDigits(viewYear.toString()),
-                            fontSize = 13.sp,
-                            color = InkSecondary
-                        )
-                    }
-                    IconButton(onClick = {
-                        if (viewMonth == 12) { viewMonth = 1; viewYear++ } else viewMonth++
-                    }) {
-                        Icon(Icons.Filled.KeyboardArrowLeft, "ماه بعد")
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Weekday header
-                Row(Modifier.fillMaxWidth()) {
-                    Jalali.weekDaysShort.forEach { d ->
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            Text(d, fontSize = 12.sp, color = InkSecondary, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                val monthLen = Jalali.monthLength(viewYear, viewMonth)
-                val offset = weekOffsetOf(viewYear, viewMonth)
-                val cells: List<Int?> = List(offset) { null } + (1..monthLen).toList()
-                val today = Jalali.todayJalali()
-
-                cells.chunked(7).forEach { week ->
-                    Row(Modifier.fillMaxWidth()) {
-                        week.forEach { day ->
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .padding(3.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (day != null) {
-                                    val isSelected = day == selectedDay
-                                    val isToday = viewYear == today[0] && viewMonth == today[1] && day == today[2]
-                                    Box(
-                                        Modifier
-                                            .aspectRatio(1f)
-                                            .then(
-                                                if (isSelected) Modifier.background(CreditGreen, CircleShape)
-                                                else if (isToday) Modifier.border(1.5.dp, CreditGreen, CircleShape)
-                                                else Modifier
-                                            )
-                                            .clickable { selectedDay = day },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            Jalali.faDigits(day.toString()),
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        repeat(7 - week.size) { Box(Modifier.weight(1f)) }
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = {
-                        val t = Jalali.todayJalali()
-                        viewYear = t[0]; viewMonth = t[1]; selectedDay = t[2]
-                    }) { Text("امروز") }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("انصراف") }
-                    Spacer(Modifier.width(6.dp))
-                    Button(
-                        onClick = {
-                            val d = selectedDay
-                            if (d != null) onPick(viewYear, viewMonth, d)
-                        },
-                        enabled = selectedDay != null
-                    ) { Text("تأیید") }
-                }
-            }
-        }
-    }
-}
-
-/** Material 3 time picker wrapped in a dialog (24-hour format). */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AppTimePickerDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onPick: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val state = rememberTimePickerState(
-        initialHour = initialHour,
-        initialMinute = initialMinute,
-        is24Hour = true
+fun DirectionBadge(direction: Int, modifier: Modifier = Modifier) {
+    val isDebt = direction == DIRECTION_I_OWE
+    Text(
+        text = if (isDebt) "بدهی من" else "طلب من از او",
+        style = MaterialTheme.typography.labelSmall,
+        color = if (isDebt) DebtRed else CreditGreen,
+        modifier = modifier
+            .background(
+                (if (isDebt) DebtRed else CreditGreen).copy(alpha = 0.12f),
+                MaterialTheme.shapes.small
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp)
     )
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Text("انتخاب ساعت", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(Modifier.height(12.dp))
-                TimePicker(state = state)
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("انصراف") }
-                    Spacer(Modifier.width(6.dp))
-                    Button(onClick = { onPick(state.hour, state.minute) }) { Text("تأیید") }
-                }
-            }
+}
+
+@Composable
+fun StatusChip(settled: Boolean, modifier: Modifier = Modifier) {
+    Text(
+        text = if (settled) "تسویه‌شده" else "باز",
+        style = MaterialTheme.typography.labelSmall,
+        color = if (settled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .background(
+                (if (settled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
+                    .copy(alpha = 0.10f),
+                MaterialTheme.shapes.small
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
+}
+
+@Composable
+fun FilterChipRow(
+    options: List<Pair<String, Boolean>>, // label, selected
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEachIndexed { i, (label, selected) ->
+            FilterChip(
+                selected = selected,
+                onClick = { onSelect(i) },
+                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
         }
     }
 }
 
-/** Register a (partial or full) payment for a transaction. */
-@Composable
-fun PayDialog(
-    personName: String,
-    remaining: Long,
-    onConfirm: (Long) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var amount by remember { mutableStateOf("") }
-    val parsed = amount.toLongOrNull() ?: 0L
+/* ------------------------------ money text ----------------------------- */
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Text("ثبت پرداخت", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+@Composable
+fun MoneyText(
+    amount: Long,
+    rial: Boolean,
+    color: Color,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleMedium,
+    modifier: Modifier = Modifier,
+    withUnit: Boolean = true
+) {
+    Text(
+        text = Fmt.money(amount, rial, withUnit),
+        style = style,
+        color = color,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+    )
+}
+
+/* ------------------------------ stat card ------------------------------ */
+
+@Composable
+fun StatCard(
+    title: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier,
+    sub: String? = null
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                color = valueColor,
+                fontWeight = FontWeight.Bold
+            )
+            if (sub != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "پرداخت برای $personName — باقی‌مانده: ${Jalali.price(remaining)} تومان",
-                    fontSize = 13.sp,
-                    color = InkSecondary
+                    sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(14.dp))
-                AmountField(value = amount, onValueChange = { amount = it })
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = {
-                        amount = (remaining / 2).toString()
-                    }) { Text("نصف مبلغ") }
-                    TextButton(onClick = {
-                        amount = remaining.toString()
-                    }) { Text("کل باقی‌مانده") }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("انصراف") }
-                    Spacer(Modifier.width(6.dp))
-                    Button(
-                        onClick = { onConfirm(parsed.coerceAtMost(remaining)) },
-                        enabled = parsed > 0
-                    ) { Text("ثبت پرداخت") }
-                }
             }
         }
     }
 }
 
 @Composable
-fun ConfirmDialog(
-    title: String,
-    message: String,
-    confirmLabel: String = "حذف",
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+}
+
+/* ------------------------------ bar chart ------------------------------ */
+
+/**
+ * Lightweight, dependency-free bar chart for reports:
+ * [points] = (dayStartMillis, receivedValue, paidValue).
+ */
+@Composable
+fun SimpleBarChart(
+    points: List<Triple<Long, Long, Long>>,
+    modifier: Modifier = Modifier
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(Modifier.padding(20.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = DebtRed)
-                Spacer(Modifier.height(8.dp))
-                Text(message, fontSize = 14.sp, textAlign = TextAlign.Start)
-                Spacer(Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("انصراف") }
-                    Spacer(Modifier.width(6.dp))
-                    Button(
-                        onClick = onConfirm,
-                        colors = ButtonDefaults.buttonColors(containerColor = DebtRed)
-                    ) { Text(confirmLabel) }
+    val green = CreditGreen
+    val red = DebtRed
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val density = LocalDensity.current
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendDot(green, "دریافت‌ها")
+                Spacer(Modifier.width(16.dp))
+                LegendDot(red, "پرداخت‌ها")
+            }
+            Spacer(Modifier.height(12.dp))
+            val maxV = points.maxOfOrNull { maxOf(it.second, it.third) } ?: 0L
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+            ) {
+                if (points.isEmpty()) return@Canvas
+                val slot = size.width / points.size
+                val barW = slot / 3f
+                val base = size.height - 22.dp.toPx()
+                val maxPx = maxV.coerceAtLeast(1L).toFloat()
+                points.forEachIndexed { i, p ->
+                    val cx = slot * i + slot / 2f
+                    val hR = base * (p.second / maxPx)
+                    val hP = base * (p.third / maxPx)
+                    drawRect(
+                        color = green,
+                        topLeft = Offset(cx - barW - 1.dp.toPx(), base - hR),
+                        size = androidx.compose.ui.geometry.Size(barW, hR)
+                    )
+                    drawRect(
+                        color = red,
+                        topLeft = Offset(cx + 1.dp.toPx(), base - hP),
+                        size = androidx.compose.ui.geometry.Size(barW, hP)
+                    )
+                    // day label (persian digit) every other bar
+                    if (i % 2 == 0) {
+                        val j = Jalali.jalaliOf(p.first)
+                        val label = Jalali.faDigits(j[2].toString())
+                        drawContext.canvas.nativeCanvas.drawText(
+                            label,
+                            cx,
+                            size.height - 4.dp.toPx(),
+                            android.graphics.Paint().apply {
+                                color = labelColor.toArgbCompat()
+                                textSize = with(density) { 9.dp.toPx() }
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isAntiAlias = true
+                            }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+private fun Color.toArgbCompat(): Int = android.graphics.Color.argb(
+    (alpha * 255).toInt(), (red * 255).toInt(), (green * 255).toInt(), (blue * 255).toInt()
+)
+
+@Composable
+fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).background(color, CircleShape))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/** Small tappable date chip used in filter rows. */
+@Composable
+fun DatePill(label: String, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Filled.CalendarMonth, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium)
         }
     }
 }

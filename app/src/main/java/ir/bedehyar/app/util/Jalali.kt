@@ -114,7 +114,7 @@ object Jalali {
     }
 
     /** "شنبه ۱۵ اردیبهشت ۱۴۰۳ - ساعت ۰۹:۳۰" */
-    fun formatDateTime(millis: Long): String {
+    fun formatFullDateTime(millis: Long): String {
         val c = Calendar.getInstance()
         c.timeInMillis = millis
         val j = toJalali(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
@@ -137,4 +137,63 @@ object Jalali {
         c.timeInMillis = millis
         return toJalali(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
     }
+
+    /* ------------------------------------------------------------------ */
+    /*  Extra helpers used by the v1.1 UI / storage layer                  */
+    /* ------------------------------------------------------------------ */
+
+    /** Short numeric date, e.g. «۱۴۰۵/۰۷/۱۰» */
+    fun formatDate(millis: Long): String {
+        if (millis <= 0L) return "—"
+        val j = jalaliOf(millis)
+        return faDigits(String.format(Locale.US, "%04d/%02d/%02d", j[0], j[1], j[2]))
+    }
+
+    /** «۱۰ مهر ۱۴۰۵» */
+    fun formatDateLong(millis: Long): String {
+        if (millis <= 0L) return "—"
+        val j = jalaliOf(millis)
+        return "${faDigits(j[2].toString())} ${monthNames[j[1] - 1]} ${faDigits(j[0].toString())}"
+    }
+
+    /** «۱۴۰۵/۰۷/۱۰ — ۰۹:۳۰» */
+    fun formatDateTime(millis: Long): String {
+        if (millis <= 0L) return "—"
+        val c = Calendar.getInstance()
+        c.timeInMillis = millis
+        val hm = two(c.get(Calendar.HOUR_OF_DAY)) + ":" + two(c.get(Calendar.MINUTE))
+        return formatDate(millis) + " — " + faDigits(hm)
+    }
+
+    fun formatTime(hour: Int, minute: Int): String =
+        faDigits(two(hour) + ":" + two(minute))
+
+    /** Parses «1403/07/10» (any digits) into epoch millis at local midnight. */
+    fun parseDateToMillis(text: String): Long? {
+        val norm = normalizeDigits(text).trim().replace('-', '/')
+        val parts = norm.split('/')
+        if (parts.size != 3) return null
+        val (y, m, d) = parts.map { it.toIntOrNull() ?: return null }
+        if (y !in 1..1600 || m !in 1..12 || d !in 1..monthLength(y, m)) return null
+        return millisFromJalali(y, m, d, 0, 0)
+    }
+
+    /** Today's jalali date as «۱۴۰۵/۰۷/۱۰» */
+    fun todayFormatted(): String = formatDate(System.currentTimeMillis())
+
+    /** Currency suffix honouring nothing but the app language (Toman by default). */
+    fun currencySuffix(): String = "تومان"
+
+    /** Start of today (local midnight) in epoch millis. */
+    fun startOfToday(): Long {
+        val c = Calendar.getInstance()
+        c.set(Calendar.HOUR_OF_DAY, 0)
+        c.set(Calendar.MINUTE, 0)
+        c.set(Calendar.SECOND, 0)
+        c.set(Calendar.MILLISECOND, 0)
+        return c.timeInMillis
+    }
+
+    /** jalali weekday index (0 = Saturday .. 6 = Friday) of a java DayOfWeek value (1..7). */
+    fun isoDowToIndex(isoValue: Int): Int = (isoValue + 1) % 7
 }

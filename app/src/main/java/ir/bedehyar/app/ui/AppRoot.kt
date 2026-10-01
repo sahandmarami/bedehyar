@@ -1,54 +1,113 @@
 package ir.bedehyar.app.ui
 
-import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import ir.bedehyar.app.TxViewModel
-import ir.bedehyar.app.ui.screen.EditScreen
-import ir.bedehyar.app.ui.screen.HomeScreen
-import ir.bedehyar.app.ui.screen.PermissionsScreen
-import ir.bedehyar.app.ui.screen.PersonScreen
+import androidx.navigation.navArgument
+import ir.bedehyar.app.MainActivity
+import ir.bedehyar.app.PermissionsAndGuide
+import ir.bedehyar.app.data.AppSettings
+import ir.bedehyar.app.ui.home.HomeScreen
+import ir.bedehyar.app.ui.person.PersonScreen
+import ir.bedehyar.app.ui.reports.ReportsScreen
+import ir.bedehyar.app.ui.settings.SettingsScreen
+import ir.bedehyar.app.ui.tx.EditScreen
+import ir.bedehyar.app.ui.tx.TransactionDetailScreen
 
+/** Application navigation graph. All screens are Persian/RTL. */
 @Composable
-fun AppRoot(vm: TxViewModel) {
+fun AppRoot(startRoute: String?, settings: AppSettings) {
     val nav = rememberNavController()
-    val start = remember { if (vm.onboardingDone) "home" else "perms" }
 
-    NavHost(navController = nav, startDestination = start) {
+    // Deep-entry (e.g. from the alarm screen): land on home first so Back works.
+    LaunchedEffect(startRoute) {
+        if (!startRoute.isNullOrBlank()) {
+            val r = if (startRoute.startsWith("tx/") || startRoute.startsWith("person/")) {
+                startRoute
+            } else {
+                when (startRoute) {
+                    "reports", "settings" -> startRoute
+                    else -> "home"
+                }
+            }
+            if (r != "home") nav.navigate(r)
+        }
+    }
+
+    NavHost(navController = nav, startDestination = "home") {
+
         composable("home") {
             HomeScreen(
-                vm = vm,
-                onOpenPerson = { name -> nav.navigate("person/${Uri.encode(name)}") },
-                onAdd = { nav.navigate("edit/-1") },
-                onOpenPerms = { nav.navigate("perms") }
+                onOpenPerson = { id -> nav.navigate("person/$id") },
+                onOpenTx = { id -> nav.navigate("tx/$id") },
+                onOpenEdit = { personId, txId, type ->
+                    nav.navigate("edit?txId=$txId&personId=$personId&type=$type")
+                },
+                onOpenReports = { nav.navigate("reports") },
+                onOpenSettings = { nav.navigate("settings") }
             )
         }
-        composable("perms") {
-            PermissionsScreen(
-                vm = vm,
-                onDone = {
-                    nav.navigate("home") {
-                        popUpTo("perms") { inclusive = true }
-                        launchSingleTop = true
-                    }
+
+        composable("reports") {
+            ReportsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenTx = { id -> nav.navigate("tx/$id") },
+                onOpenPerson = { id -> nav.navigate("person/$id") }
+            )
+        }
+
+        composable("settings") {
+            SettingsScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(
+            route = "person/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { entry ->
+            PersonScreen(
+                personId = entry.arguments?.getLong("id") ?: 0L,
+                onBack = { nav.popBackStack() },
+                onOpenTx = { id -> nav.navigate("tx/$id") },
+                onOpenEdit = { personId, txId, type ->
+                    nav.navigate("edit?txId=$txId&personId=$personId&type=$type")
                 }
             )
         }
-        composable("person/{name}") { entry ->
-            val name = entry.arguments?.getString("name") ?: ""
-            PersonScreen(
-                vm = vm,
-                personName = name,
+
+        composable(
+            route = "tx/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { entry ->
+            TransactionDetailScreen(
+                txId = entry.arguments?.getLong("id") ?: 0L,
                 onBack = { nav.popBackStack() },
-                onEdit = { id -> nav.navigate("edit/$id") }
+                onOpenPerson = { id -> nav.navigate("person/$id") },
+                onOpenEdit = { personId, txId, type ->
+                    nav.navigate("edit?txId=$txId&personId=$personId&type=$type")
+                }
             )
         }
-        composable("edit/{id}") { entry ->
-            val id = entry.arguments?.getString("id")?.toLongOrNull() ?: -1L
-            EditScreen(vm = vm, txId = id, onBack = { nav.popBackStack() })
+
+        composable(
+            route = "edit?txId={txId}&personId={personId}&type={type}",
+            arguments = listOf(
+                navArgument("txId") { type = NavType.LongType; defaultValue = 0L },
+                navArgument("personId") { type = NavType.LongType; defaultValue = 0L },
+                navArgument("type") { type = NavType.IntType; defaultValue = -1 }
+            )
+        ) { entry ->
+            EditScreen(
+                txId = entry.arguments?.getLong("txId") ?: 0L,
+                presetPersonId = entry.arguments?.getLong("personId") ?: 0L,
+                presetType = entry.arguments?.getInt("type") ?: -1,
+                onBack = { nav.popBackStack() },
+                onOpenPerson = { id -> nav.navigate("person/$id") }
+            )
         }
     }
+
+    PermissionsAndGuide(settings)
 }

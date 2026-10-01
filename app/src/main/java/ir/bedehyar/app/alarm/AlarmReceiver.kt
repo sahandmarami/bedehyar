@@ -1,49 +1,60 @@
 package ir.bedehyar.app.alarm
 
-import android.app.AlarmManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
-import android.os.Bundle
-import android.provider.Settings
+import ir.bedehyar.app.App
+import ir.bedehyar.app.data.AppDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
+/**
+ * Fired by AlarmManager when a due-date reminder triggers.
+ * Re-validates the transaction against the CURRENT database state (it may have
+ * been settled or deleted since the alarm was set) and then starts the
+ * foreground [AlarmService] which plays sound + vibration and posts the
+ * full-screen notification.
+ */
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != AlarmScheduler.ACTION_FIRE) return
-        val extras = intent.extras ?: return
-        if (!extras.containsKey(AlarmActivity.EXTRA_ID)) return
+        val txId = intent.getLongExtra(AlarmActivity.EXTRA_ID, -1L)
+        if (txId <= 0L) return
 
-        // 1) Start the foreground service that plays the alarm sound + vibration.
-        val svc = Intent(context, AlarmService::class.java).putExtras(Bundle(extras))
-        context.startForegroundService(svc)
-
-        // 2) Try to open the full-screen AlarmActivity directly.
-        //    On Android 10+ background activity starts are blocked unless the app
-        //    can draw overlays or holds an exact-alarm permission (exempt on 14+).
-        val canDraw = Settings.canDrawOverlays(context)
-        val canExact = if (Build.VERSION.SDK_INT >= 31) {
-            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            try { am.canScheduleExactAlarms() } catch (_: Exception) { false }
-        } else {
-            true
-        }
-        if (Build.VERSION.SDK_INT < 29 || canDraw || canExact) {
+        val result = goAsync()
+        val appContext = context.applicationContext
+        CoroutineScope(Dispatchers.IO).launch {
             try {
-                context.startActivity(
-                    Intent(context, AlarmActivity::class.java)
-                        .addFlags(
-                            Intent.FLAG_ACTIVITY_NEW_TASK or
-                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        )
-                        .putExtras(Bundle(extras))
-                )
+                val db = AppDatabase.get(appContext)
+                val settings = (appContext as App).settings.snapshot()
+
+                val tw = db.txDao().getById(txId)
+                if (tw == null || tw.isSettled || tw.tx.isArchived || !tw.tx.reminderEnabled) {
+                    AlarmScheduler.cancel(appContext, txId)
+                    db.reminderDao().deactivate(txId)
+                    return@launch
+                }
+                if (!settings.remindersEnabled) {
+                    // Master switch off -> stay silent, keep the reminder row for later.
+                    return@launch
+                }
+
+                val service = Intent(appContext, AlarmService::class.java)
+                    .putExtra(AlarmActivity.EXTRA_ID, txId)
+                    .putExtra(AlarmActivity.EXTRA_NAME, tw.personName)
+                    .putExtra(AlarmActivity.EXTRA_AMOUNT, tw.remaining)
+                    .putExtra(AlarmActivity.EXTRA_IOWE, tw.tx.direction == ir.bedehyar.app.data.DIRECTION_I_OWE)
+                    .putExtra(AlarmActivity.EXTRA_NOTE, tw.tx.description)
+                    .putExtra(AlarmActivity.EXTRA_DUE, tw.tx.dueDate ?: 0L)
+
+                androidx.core.content.ContextCompat.startForegroundService(appContext, service)
             } catch (_: Exception) {
+                // Never crash the system broadcast; a missed ring is recoverable.
+            } finally {
+                result.finish()
             }
         }
-        // 3) The service also posts a full-screen-intent notification
-        //    (channel IMPORTANCE_HIGH) which opens AlarmActivity on lock screen.
     }
 }

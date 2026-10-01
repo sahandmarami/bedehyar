@@ -3,13 +3,16 @@ package ir.bedehyar.app.alarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import ir.bedehyar.app.data.AppDatabase
+import ir.bedehyar.app.App
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Re-schedules all pending alarms after a device reboot or app update.
+ * After a reboot or an app update every scheduled alarm is gone (alarms do not
+ * survive reboots), so this receiver rebuilds them from the local `reminders`
+ * table. Rows in the past are deactivated instead of re-fired, which prevents
+ * a flood of stale alarms.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -22,11 +25,12 @@ class BootReceiver : BroadcastReceiver() {
         ) return
 
         val result = goAsync()
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val dao = AppDatabase.get(context).dao()
-                val now = System.currentTimeMillis()
-                dao.pendingAlarms(now).forEach { AlarmScheduler.schedule(context, it) }
+                val app = appContext as App
+                val master = app.settings.snapshot().remindersEnabled
+                AlarmScheduler.rebuildAll(appContext, master)
             } catch (_: Exception) {
             } finally {
                 result.finish()

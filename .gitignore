@@ -7,3 +7,16 @@ app/build/
 captures/
 .externalNativeBuild/
 .cxx/
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+*.jks
+.env-build/
+release.keystore

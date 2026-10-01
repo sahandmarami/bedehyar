@@ -1,0 +1,138 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (e.g. v1.1.0)"
+        required: false
+        default: "v1.1.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/release.keystore"
+            echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "SIGNING_SOURCE=project-release-key" >> "$GITHUB_ENV"
+            echo "Keystore loaded from repository secrets."
+          else
+            echo "SIGNING_SOURCE=ci-ephemeral-key" >> "$GITHUB_ENV"
+            keytool -genkeypair -v \
+              -keystore "$GITHUB_WORKSPACE/release.keystore" \
+              -alias hesabyar-ci -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass hesabyar-ci-pass -keypass hesabyar-ci-pass \
+              -dname "CN=HesabYar CI, OU=Mobile, O=HesabYar, L=Tehran, C=IR"
+            echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=hesabyar-ci-pass" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=hesabyar-ci" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=hesabyar-ci-pass" >> "$GITHUB_ENV"
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret found — APK signed with an EPHEMERAL CI key. Add the 4 ANDROID_KEYSTORE_* secrets for a stable release signature."
+          fi
+
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build signed release APK
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Verify APK signature and checksum
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK" || { echo "Release APK missing"; exit 1; }
+          APKSIGNER=$(ls "$ANDROID_HOME/build-tools"/*/apksigner | sort | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK"
+          sha256sum "$APK" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Name the APK
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            NAME="HesabYar-${GITHUB_REF_NAME}-release.apk"
+          else
+            NAME="HesabYar-${{ inputs.release_tag }}-release.apk"
+          fi
+          cp "app/build/outputs/apk/release/app-release.apk" "$NAME"
+          echo "APK_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HesabYar-release-apk
+          path: |
+            ${{ env.APK_NAME }}
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name != 'main' && github.ref_name || inputs.release_tag }}
+          name: "حساب‌یار ${{ github.ref_name != 'main' && github.ref_name || inputs.release_tag }}"
+          target_commitish: ${{ github.ref_name != 'main' && github.ref_name || github.sha }}
+          draft: false
+          prerelease: false
+          body: |
+            ## حساب‌یار — نسخه ${{ github.ref_name != 'main' && github.ref_name || inputs.release_tag }}
+
+            مدیریت آفلاین بدهی‌ها، طلب‌ها، پرداخت‌ها و سررسیدهای مالی با رابط کاملاً فارسی و راست‌به‌چپ.
+
+            ### امکانات اصلی
+            - داشبورد کامل: مجموع طلب‌ها و بدهی‌ها، خالص حساب، حساب‌های باز، سررسیدهای امروز/گذشته و نزدیک‌ترین سررسید
+            - ثبت بدهی/طلب با تقویم شمسی، دسته‌بندی، یادداشت خصوصی و شماره تماس
+            - پرداخت کامل و جزئی با حفظ تاریخ سررسید و محاسبه خودکار مانده
+            - صفحه اختصاصی هر شخص با تاریخچه تراکنش‌ها و پرداخت‌ها
+            - یادآوری دقیق سررسید با AlarmManager و صفحه آلارم تمام‌صفحه (خاموش کردن / تعویق ۱۰ دقیقه)
+            - گزارش‌های روزانه/هفتگی/ماهانه و بازه دلخواه با نمودار و خروجی CSV
+            - پشتیبان‌گیری و بازیابی JSON (کاملاً آفلاین، بدون ارسال داده به سرور)
+            - تم روشن و تاریک، فونت وزیرمتن، اعداد فارسی با جداکننده هزارگان
+
+            ### نصب
+            1. فایل APK زیر را دانلود کنید.
+            2. اگر نصب از منابع ناشناس مسدود است، اجازه نصب را بدهید.
+            3. پس از نصب، اجازه «اعلان‌ها» و «آلارم دقیق» را تأیید کنید تا یادآوری‌ها درست کار کنند.
+
+            ### محدودیت‌های شناخته‌شده
+            - امضای این نسخه: ${{ env.SIGNING_SOURCE }}
+            - اگر اندروید ۱۲+ است، برای پخش دقیق آلارم باید دسترسی «آلارم دقیق» از تنظیمات داده شود؛ در غیر این صورت یادآوری با پنجره ±۱۰ دقیقه انجام می‌شود.
+            - نصب این نسخه روی نسخه‌های قبلی با امضای متفاوت ممکن است به حذف نصب قبلی نیاز داشته باشد.
+
+            ### بررسی صحت فایل
+            هش SHA-256 فایل APK در فایل SHA256SUMS.txt منتشر شده است.
+          files: |
+            ${{ env.APK_NAME }}
+            SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
