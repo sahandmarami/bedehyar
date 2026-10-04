@@ -252,8 +252,6 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(CardGap))
-
             if (persons.isEmpty()) {
                 item {
                     EmptyPeopleState(searchBlank = search.isBlank() && filter == FILTER_ALL)
