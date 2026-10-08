@@ -95,7 +95,7 @@ class AlarmService : Service() {
         val amount = extras.getLong(AlarmActivity.EXTRA_AMOUNT, 0L)
         val iOwe = extras.getBoolean(AlarmActivity.EXTRA_IOWE, true)
         val title = "زمان سررسید رسیده است"
-        val typeLabel = if (iOwe) "بدهی من" else "طلب من از او"
+        val typeLabel = if (iOwe) "بدهی من" else "طلب من"
         val text = "$name — $typeLabel — ${Jalali.price(amount)} ${Jalali.currencySuffix()}"
 
         val fullScreenPi = PendingIntent.getActivity(

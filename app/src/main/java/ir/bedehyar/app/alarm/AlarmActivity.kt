@@ -206,7 +206,7 @@ private fun AlarmScreen(
                 androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            if (p.iOwe) "بدهی من به او" else "طلب من از او",
+                            if (p.iOwe) "بدهی من" else "طلب من",
                             style = MaterialTheme.typography.labelMedium,
                             color = if (p.iOwe) DebtRed else MaterialTheme.colorScheme.primary
                         )

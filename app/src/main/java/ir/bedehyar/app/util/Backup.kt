@@ -204,7 +204,7 @@ object CsvExporter {
             ).joinToString(",") { esc(it) }
         )
         txs.forEach { t ->
-            val typeName = if (t.tx.direction == DIRECTION_I_OWE) "من بدهکارم" else "او به من بدهکار است"
+            val typeName = if (t.tx.direction == DIRECTION_I_OWE) "بدهی من" else "طلب من"
             val status = if (t.isSettled) "تسویه‌شده" else "باز"
             sb.appendLine(
                 listOf(

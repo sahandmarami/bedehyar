@@ -11,17 +11,13 @@ import ir.bedehyar.app.data.PersonWithBalance
 import ir.bedehyar.app.data.TxWithRemaining
 import ir.bedehyar.app.util.Fmt
 import ir.bedehyar.app.util.Jalali
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class PersonViewModel(app: Application, private val personId: Long) : AndroidViewModel(app) {
 
     private val db = AppDatabase.get(app)
@@ -36,27 +32,8 @@ class PersonViewModel(app: Application, private val personId: Long) : AndroidVie
         .map { it.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /* transaction tab filters: status 0=all, 1=open, 2=settled */
-    val status = MutableStateFlow(0)
-    val from = MutableStateFlow(0L)
-    val to = MutableStateFlow(0L)
-    val tab = MutableStateFlow(0) // 0 = transactions, 1 = payments
-
-    val transactions = combine(status, from, to) { s, f, t -> Triple(s, f, t) }
-        .flatMapLatest { (s, f, t) ->
-            db.txDao().observeForPerson(personId).map { list ->
-                list.filter { item ->
-                    val statusOk = when (s) {
-                        1 -> !item.isSettled
-                        2 -> item.isSettled
-                        else -> true
-                    }
-                    val fromOk = f == 0L || item.tx.createdAt >= f
-                    val toOk = t == 0L || item.tx.createdAt <= (t + 86_399_999L)
-                    statusOk && fromOk && toOk
-                }
-            }
-        }
+    /* همه تراکنش‌ها و همه پرداخت‌ها، بدون هیچ فیلتری (لیست ساده) */
+    val transactions = db.txDao().observeForPerson(personId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val payments = db.paymentDao().observeForPerson(personId)

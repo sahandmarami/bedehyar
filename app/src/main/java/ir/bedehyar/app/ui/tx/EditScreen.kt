@@ -200,12 +200,12 @@ fun EditScreen(
                         FilterChip(
                             selected = direction == DIRECTION_I_OWE,
                             onClick = { vm.direction.value = DIRECTION_I_OWE },
-                            label = { Text("من بدهکارم") }
+                            label = { Text("بدهی من") }
                         )
                         FilterChip(
                             selected = direction == DIRECTION_OWES_ME,
                             onClick = { vm.direction.value = DIRECTION_OWES_ME },
-                            label = { Text("او به من بدهکار است") }
+                            label = { Text("طلب من") }
                         )
                     }
                     if (direction == DIRECTION_I_OWE) {

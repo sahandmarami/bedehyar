@@ -480,8 +480,8 @@ private fun PersonRow(p: PersonWithBalance, rial: Boolean, onClick: () -> Unit) 
     val amount = kotlin.math.abs(p.net)
     val (statusText, statusColor, amountColor) = when {
         p.overdueCount > 0 -> Triple("موعد گذشته", DebtRed, if (p.net > 0) CreditGreen else DebtRed)
-        p.net > 0 -> Triple("طلب از او", CreditGreen, CreditGreen)
-        p.net < 0 -> Triple("من به او بدهکارم", DebtRed, DebtRed)
+        p.net > 0 -> Triple("بدهکار", CreditGreen, CreditGreen)
+        p.net < 0 -> Triple("بستانکار", DebtRed, DebtRed)
         else -> Triple("تسویه‌شده", InkSecondary, InkSecondary)
     }
 

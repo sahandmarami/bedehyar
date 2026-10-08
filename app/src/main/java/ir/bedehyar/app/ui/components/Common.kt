@@ -211,7 +211,7 @@ fun AmountField(
 fun DirectionBadge(direction: Int, modifier: Modifier = Modifier) {
     val isDebt = direction == DIRECTION_I_OWE
     Text(
-        text = if (isDebt) "بدهی من" else "طلب من از او",
+        text = if (isDebt) "بدهی من" else "طلب من",
         style = MaterialTheme.typography.labelSmall,
         color = if (isDebt) DebtRed else CreditGreen,
         modifier = modifier
