@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
@@ -22,13 +24,14 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -165,14 +168,12 @@ fun TransactionDetailScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                Fmt.money(item.tx.amount, rial),
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = accent
-                            )
-                        }
+                        Text(
+                            Fmt.money(item.tx.amount, rial),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = accent
+                        )
                         Spacer(Modifier.height(10.dp))
                         LinearProgressIndicator(
                             progress = { progress },
@@ -212,25 +213,42 @@ fun TransactionDetailScreen(
                 }
             }
 
-            item {
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { showAddPayment = true },
-                        enabled = !item.isSettled && !busy,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.Payments, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (isDebt) "ثبت پرداخت جزئی" else "ثبت دریافت جزئی")
-                    }
-                    Button(
-                        onClick = { showSettle = true },
-                        enabled = !item.isSettled && !busy,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.Paid, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("تسویه کامل")
+            if (!item.isSettled) {
+                item {
+                    // دو دکمه هم‌اندازه و متقارن (کم‌ارتفاع) — مخفی وقتی تسویه شده
+                    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = { showAddPayment = true },
+                            enabled = !busy,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                        ) {
+                            Icon(Icons.Filled.Payments, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (isDebt) "ثبت پرداخت" else "ثبت دریافت",
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { showSettle = true },
+                            enabled = !busy,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                        ) {
+                            Icon(Icons.Filled.Paid, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("تسویه کامل", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        }
                     }
                 }
             }
