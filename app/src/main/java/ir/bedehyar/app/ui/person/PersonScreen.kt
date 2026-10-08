@@ -14,13 +14,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.InterpreterMode
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +33,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -52,6 +57,7 @@ import ir.bedehyar.app.App
 import ir.bedehyar.app.data.PersonWithBalance
 import ir.bedehyar.app.data.TxWithRemaining
 import ir.bedehyar.app.ui.components.AppScaffold
+import ir.bedehyar.app.ui.components.AmountField
 import ir.bedehyar.app.ui.components.ConfirmDialog
 import ir.bedehyar.app.ui.components.DatePill
 import ir.bedehyar.app.ui.components.DirectionBadge
@@ -100,6 +106,7 @@ fun PersonScreen(
 
     var showEdit by remember { mutableStateOf(false) }
     var showDeletePerson by remember { mutableStateOf(false) }
+    var showQuickPay by remember { mutableStateOf(false) }
     var showFromPicker by remember { mutableStateOf(false) }
     var showToPicker by remember { mutableStateOf(false) }
 
@@ -165,6 +172,41 @@ fun PersonScreen(
                             sub = person?.phone?.takeIf { it.isNotBlank() }
                                 ?.let { "تماس: " + Jalali.faDigits(it) }
                         )
+                    }
+                }
+            }
+
+            item {
+                // ---------- دکمه‌های اقدام سریع: پرداخت جزئی + تراکنش جدید ----------
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showQuickPay = true },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Filled.RemoveCircleOutline, contentDescription = null,
+                            modifier = Modifier.width(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("ثبت پرداخت")
+                    }
+                    Button(
+                        onClick = { onOpenEdit(personId, 0L, -1) },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Filled.Add, contentDescription = null,
+                            modifier = Modifier.width(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("بدهی / طلب جدید")
                     }
                 }
             }
@@ -303,6 +345,15 @@ fun PersonScreen(
             onDismiss = { showDeletePerson = false }
         )
     }
+    if (showQuickPay) {
+        QuickPayDialog(
+            onConfirm = { amount, note ->
+                showQuickPay = false
+                vm.recordQuickPayment(amount, note)
+            },
+            onDismiss = { showQuickPay = false }
+        )
+    }
     if (showFromPicker) {
         JalaliDatePickerDialog(
             initialMillis = if (from > 0) from else System.currentTimeMillis(),
@@ -365,6 +416,45 @@ private fun TxRow(t: TxWithRemaining, rial: Boolean, onClick: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun QuickPayDialog(
+    onConfirm: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var amount by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ثبت پرداخت جزئی") },
+        text = {
+            Column {
+                Text(
+                    "مبلغ واردشده به قدیمی‌ترین تراکنشِ باز این شخص اضافه می‌شود.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                AmountField(
+                    label = "مبلغ (تومان)",
+                    value = amount,
+                    onValueChange = { amount = it }
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("یادداشت (اختیاری)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(amount, note) }) { Text("ثبت پرداخت") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }
+    )
 }
 
 @Composable

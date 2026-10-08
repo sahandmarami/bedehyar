@@ -187,46 +187,6 @@ fun HomeScreen(
                 )
             }
 
-            // ---------- نوار فیلتر (اسکرول افقی، بدون بریدگی) ----------
-            item {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = CardGap)
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = PagePadding)
-                ) {
-                    val filterOptions = listOf(
-                        "همه" to FILTER_ALL,
-                        "بدهی‌ها" to FILTER_DEBTORS,
-                        "طلب‌ها" to FILTER_CREDITORS,
-                        "تسویه‌شده" to FILTER_SETTLED,
-                        "موعد گذشته" to FILTER_OVERDUE
-                    )
-                    filterOptions.forEach { (label, id) ->
-                        FilterChip(
-                            selected = filter == id,
-                            onClick = { vm.filter.value = id },
-                            label = {
-                                Text(
-                                    label,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (filter == id)
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    else InkSecondary
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-                }
-            }
-
             // ---------- عنوان لیست + مرتب‌سازی ----------
             item {
                 Row(
@@ -241,12 +201,6 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = InkPrimary
                     )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = "(${Jalali.faDigits(persons.size.toString())})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkSecondary
-                    )
                     Spacer(Modifier.weight(1f))
                     SortControl(current = sort, onSelect = { vm.sort.value = it })
                 }
@@ -254,7 +208,7 @@ fun HomeScreen(
 
             if (persons.isEmpty()) {
                 item {
-                    EmptyPeopleState(searchBlank = search.isBlank() && filter == FILTER_ALL)
+                    EmptyPeopleState(searchBlank = search.isBlank())
                 }
             } else {
                 items(persons, key = { it.person.id }) { p ->

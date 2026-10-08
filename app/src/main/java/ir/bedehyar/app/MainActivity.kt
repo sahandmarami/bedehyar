@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ir.bedehyar.app.data.AppSettings
 import ir.bedehyar.app.ui.AppRoot
 import ir.bedehyar.app.ui.theme.BedehyarTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -84,10 +85,21 @@ fun PermissionsAndGuide(settings: AppSettings) {
         }
     }
 
-    var showGuide by remember { mutableStateOf(!settings.guideShown) }
+    // فقط بعد از اولین خواندن واقعی DataStore تصمیم می‌گیریم؛
+    // وگرنه مقدار پیش‌فرض (guideShown=false) باعث نمایش دوباره پیام در هر بار باز شدن می‌شد.
+    var settingsLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        app.settings.flow.first()
+        settingsLoaded = true
+    }
+
+    val showGuide = settingsLoaded && !settings.guideShown
     if (showGuide) {
         AlertDialog(
-            onDismissRequest = { showGuide = false },
+            onDismissRequest = {
+                // بستن با لمس بیرون هم به عنوان «دیده شده» ثبت می‌شود
+                scope.launch { app.settings.setGuideShown(true) }
+            },
             title = { Text("خوش آمدید 👋") },
             text = {
                 Column {
@@ -107,7 +119,6 @@ fun PermissionsAndGuide(settings: AppSettings) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showGuide = false
                     scope.launch { app.settings.setGuideShown(true) }
                 }) { Text("متوجه شدم") }
             }

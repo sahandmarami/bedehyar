@@ -9,10 +9,13 @@ import ir.bedehyar.app.data.PaymentWithTx
 import ir.bedehyar.app.data.Person
 import ir.bedehyar.app.data.PersonWithBalance
 import ir.bedehyar.app.data.TxWithRemaining
+import ir.bedehyar.app.util.Fmt
+import ir.bedehyar.app.util.Jalali
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -92,4 +95,28 @@ class PersonViewModel(app: Application, private val personId: Long) : AndroidVie
     }
 
     fun consumeMessage() { message.value = null }
+
+    /**
+     * ثبت سریع پرداخت جزئی: مبلغ روی قدیمی‌ترین تراکنشِ بازِ این شخص اعمال می‌شود.
+     * نتیجه (موفقیت/خطا) از طریق message به Snackbar می‌رود.
+     */
+    fun recordQuickPayment(amountText: String, note: String) {
+        val amount = Fmt.parseAmount(amountText)
+        if (amount <= 0L) {
+            message.value = "مبلغ پرداخت را وارد کنید"
+            return
+        }
+        viewModelScope.launch {
+            val openTxs = db.txDao().observeForPerson(personId).first().filter { !it.isSettled }
+            val target = openTxs.minByOrNull { it.tx.createdAt }
+            if (target == null) {
+                message.value = "همه تراکنش‌های این شخص تسویه شده است"
+            } else {
+                val err = ledger.addPayment(
+                    target.tx.id, amount, System.currentTimeMillis(), note.trim()
+                )
+                message.value = err ?: "پرداخت " + Fmt.money(amount, false) + " ثبت شد"
+            }
+        }
+    }
 }
