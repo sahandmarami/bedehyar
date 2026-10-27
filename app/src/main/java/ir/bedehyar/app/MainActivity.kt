@@ -14,6 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import ir.bedehyar.app.util.CrashReporter
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,7 +58,20 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = AppSettings())
             BedehyarTheme(themeMode = settings.themeMode) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    AppRoot(startRoute = startRoute, settings = settings)
+                    // اگر خطای مرگبار قبلی ثبت شده باشد، ابتدا گزارش آن نشان داده
+                    // می‌شود تا حتی در حالت کرش‌لقپ هم قابل خواندن/کپی باشد.
+                    var crashReport by remember { mutableStateOf(CrashReporter.lastCrash(app)) }
+                    if (crashReport != null) {
+                        CrashReportDialog(
+                            text = crashReport.orEmpty(),
+                            onDismiss = {
+                                CrashReporter.clear(app)
+                                crashReport = null
+                            }
+                        )
+                    } else {
+                        AppRoot(startRoute = startRoute, settings = settings)
+                    }
                 }
             }
         }
@@ -62,6 +80,42 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_ROUTE = "bedehyar.extra.ROUTE"
     }
+}
+
+/** Full-screen-gated dialog that shows the last fatal error and lets the user copy it. */
+@Composable
+fun CrashReportDialog(text: String, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("گزارش خطای آخرین اجرا") },
+        text = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text.take(4000),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "لطفاً با دکمهٔ کپی، متن را کپی و برای پشتیبانی بفرستید.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(text))
+                onDismiss()
+            }) { Text("کپی و بستن") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("بستن بدون کپی") }
+        }
+    )
 }
 
 /** Runtime permission + first-run guidance, rendered inside the app root. */

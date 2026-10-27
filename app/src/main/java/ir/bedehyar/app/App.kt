@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import ir.bedehyar.app.data.AppDatabase
 import ir.bedehyar.app.data.Ledger
 import ir.bedehyar.app.data.SettingsRepository
+import ir.bedehyar.app.util.CrashReporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,6 +21,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         createChannels()
         appScope.launch { ledger.ensureCategories() }
     }

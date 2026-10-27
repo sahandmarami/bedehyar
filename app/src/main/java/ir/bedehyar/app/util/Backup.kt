@@ -11,6 +11,7 @@ import ir.bedehyar.app.data.Payment
 import ir.bedehyar.app.data.Person
 import ir.bedehyar.app.data.Reminder
 import ir.bedehyar.app.data.TxWithRemaining
+import androidx.room.withTransaction
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -114,9 +115,7 @@ object BackupManager {
         val db = AppDatabase.get(context)
         val ledger = (context.applicationContext as App).ledger
 
-        // Wipe (also cancels alarms) then insert with preserved ids.
-        ledger.clearEverything()
-
+        // ---- 1) Parse everything first (no DB touch yet) ----
         val persons = (0 until personsArr.length()).map { i ->
             val o = personsArr.getJSONObject(i)
             Person(
@@ -127,15 +126,13 @@ object BackupManager {
                 createdAt = o.optLong("createdAt", 0L)
             )
         }
-        db.personDao().insertAll(persons)
 
         val categories = (0 until categoriesArr.length()).map { i ->
             val o = categoriesArr.getJSONObject(i)
             Category(id = o.getLong("id"), name = o.getString("name"))
         }
-        if (categories.isNotEmpty()) db.categoryDao().insertAll(categories)
 
-        val txs = (0 until txsArr.length()).map { i ->
+        val txsAll = (0 until txsArr.length()).map { i ->
             val o = txsArr.getJSONObject(i)
             DebtTransaction(
                 id = o.getLong("id"),
@@ -153,9 +150,8 @@ object BackupManager {
                 privateNote = o.optString("privateNote", "")
             )
         }
-        db.txDao().insertAll(txs)
 
-        val payments = (0 until paymentsArr.length()).map { i ->
+        val paymentsAll = (0 until paymentsArr.length()).map { i ->
             val o = paymentsArr.getJSONObject(i)
             Payment(
                 id = o.getLong("id"),
@@ -165,9 +161,8 @@ object BackupManager {
                 note = o.optString("note", "")
             )
         }
-        if (payments.isNotEmpty()) db.paymentDao().insertAll(payments)
 
-        val reminders = (0 until remindersArr.length()).map { i ->
+        val remindersAll = (0 until remindersArr.length()).map { i ->
             val o = remindersArr.getJSONObject(i)
             Reminder(
                 transactionId = o.getLong("transactionId"),
@@ -175,7 +170,28 @@ object BackupManager {
                 isActive = o.optBoolean("isActive", true)
             )
         }
-        if (reminders.isNotEmpty()) db.reminderDao().insertAll(reminders)
+
+        // ---- 2) Validate references so old/broken backups can never break
+        //         foreign keys: drop orphans, dedupe reminders (UNIQUE index). ----
+        val personIds = persons.map { it.id }.toHashSet()
+        val txs = txsAll.filter { it.personId in personIds }
+        val txIds = txs.map { it.id }.toHashSet()
+        val payments = paymentsAll.filter { it.transactionId in txIds }
+        val seenTxForReminder = HashSet<Long>()
+        val reminders = remindersAll.filter {
+            it.transactionId in txIds && seenTxForReminder.add(it.transactionId)
+        }
+
+        // ---- 3) Replace everything ATOMICALLY: on any failure the previous
+        //         data stays intact (no half-wiped database). ----
+        db.withTransaction {
+            ledger.clearEverything()
+            db.personDao().insertAll(persons)
+            if (categories.isNotEmpty()) db.categoryDao().insertAll(categories)
+            db.txDao().insertAll(txs)
+            if (payments.isNotEmpty()) db.paymentDao().insertAll(payments)
+            if (reminders.isNotEmpty()) db.reminderDao().insertAll(reminders)
+        }
 
         // Rebuild alarms for still-valid reminders.
         ledger.rebuildAllAlarms()

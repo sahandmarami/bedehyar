@@ -124,7 +124,7 @@ fun TransactionDetailScreen(
             )
             return@AppScaffold
         }
-        val item = tw!!
+        val item = tw ?: return@AppScaffold
         val isDebt = item.tx.direction == DIRECTION_I_OWE
         val accent = if (isDebt) DebtRed else CreditGreen
         val progress = if (item.tx.amount > 0) {
