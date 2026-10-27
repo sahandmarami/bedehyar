@@ -281,6 +281,8 @@ fun PersonScreen(
     }
     if (showQuickPay) {
         QuickPayDialog(
+            openRemaining = txs.filter { !it.isSettled }.sumOf { it.remaining },
+            rial = rial,
             onConfirm = { amount, note ->
                 showQuickPay = false
                 vm.recordQuickPayment(amount, note)
@@ -340,6 +342,8 @@ private fun TxRow(t: TxWithRemaining, rial: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun QuickPayDialog(
+    openRemaining: Long,
+    rial: Boolean,
     onConfirm: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -347,11 +351,17 @@ private fun QuickPayDialog(
     var note by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ثبت پرداخت جزئی") },
+        title = { Text("ثبت پرداخت") },
         text = {
             Column {
                 Text(
-                    "مبلغ واردشده به قدیمی‌ترین تراکنشِ باز این شخص اضافه می‌شود.",
+                    "مانده باز این شخص: " + Fmt.money(openRemaining, rial),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "مبلغ از مجموع تراکنش‌های باز کسر می‌شود (قدیمی‌ترین اول) و بین چند تراکنش تقسیم می‌شود.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -366,7 +376,8 @@ private fun QuickPayDialog(
                     value = note,
                     onValueChange = { note = it },
                     label = { Text("یادداشت (اختیاری)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         },

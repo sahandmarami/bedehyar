@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import ir.bedehyar.app.App
 import ir.bedehyar.app.data.AppDatabase
+import ir.bedehyar.app.data.DIRECTION_I_OWE
+import ir.bedehyar.app.data.DIRECTION_OWES_ME
 import ir.bedehyar.app.data.PaymentWithTx
 import ir.bedehyar.app.data.Person
 import ir.bedehyar.app.data.PersonWithBalance
@@ -74,8 +76,12 @@ class PersonViewModel(app: Application, private val personId: Long) : AndroidVie
     fun consumeMessage() { message.value = null }
 
     /**
-     * ثبت سریع پرداخت جزئی: مبلغ روی قدیمی‌ترین تراکنشِ بازِ این شخص اعمال می‌شود.
-     * نتیجه (موفقیت/خطا) از طریق message به Snackbar می‌رود.
+     * ثبت سریع پرداخت: مبلغ از «مجموعِ» تراکنش‌های بازِ این شخص کم می‌شود و
+     * خودکار بین آنها تخصیص می‌یابد (قدیمی‌ترین اول)، پس بزرگ‌تربودن مبلغ از
+     * ماندهِ یک تراکنش دیگر خطا نمی‌دهد. اول تراکنش‌های «او به من بدهکار»
+     * (دریافت از او) و سپس «من به او بدهکار» پر می‌شوند. اگر مبلغ از ماندهِ کل
+     * بیشتر باشد همه تراکنش‌ها تسویه و مازاد در پیام اعلام می‌شود.
+     * نتیجه از طریق message به Snackbar می‌رود.
      */
     fun recordQuickPayment(amountText: String, note: String) {
         val amount = Fmt.parseAmount(amountText)
@@ -85,14 +91,35 @@ class PersonViewModel(app: Application, private val personId: Long) : AndroidVie
         }
         viewModelScope.launch {
             val openTxs = db.txDao().observeForPerson(personId).first().filter { !it.isSettled }
-            val target = openTxs.minByOrNull { it.tx.createdAt }
-            if (target == null) {
+            if (openTxs.isEmpty()) {
                 message.value = "همه تراکنش‌های این شخص تسویه شده است"
-            } else {
-                val err = ledger.addPayment(
-                    target.tx.id, amount, System.currentTimeMillis(), note.trim()
-                )
-                message.value = err ?: "پرداخت " + Fmt.money(amount, false) + " ثبت شد"
+                return@launch
+            }
+            val ordered =
+                openTxs.filter { it.tx.direction == DIRECTION_OWES_ME }.sortedBy { it.tx.createdAt } +
+                openTxs.filter { it.tx.direction == DIRECTION_I_OWE }.sortedBy { it.tx.createdAt }
+            val totalRemaining = ordered.sumOf { it.remaining }
+            val applicable = minOf(amount, totalRemaining)
+            val date = System.currentTimeMillis()
+            var left = applicable
+            var touched = 0
+            var failed: String? = null
+            for (t in ordered) {
+                if (left <= 0L) break
+                val pay = minOf(left, t.remaining)
+                val err = ledger.addPayment(t.tx.id, pay, date, note.trim())
+                if (err != null) { failed = err; break }
+                left -= pay
+                touched++
+            }
+            message.value = when {
+                failed != null -> failed
+                amount > totalRemaining ->
+                    "همه تراکنش‌ها تسویه شد؛ ${Fmt.money(amount - totalRemaining, false)} بیشتر از مانده بود و اضافه آن ثبت نشد"
+                touched > 1 ->
+                    "پرداخت ${Fmt.money(applicable, false)} بین $touched تراکنش تخصیص یافت"
+                else ->
+                    "پرداخت ${Fmt.money(applicable, false)} ثبت شد"
             }
         }
     }
