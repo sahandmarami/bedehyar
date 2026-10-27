@@ -81,8 +81,12 @@ fun PersonScreen(
     )
     val person by vm.person.collectAsStateWithLifecycle()
     val balance by vm.balance.collectAsStateWithLifecycle()
-    val txs by vm.transactions.collectAsStateWithLifecycle()
-    val payments by vm.payments.collectAsStateWithLifecycle()
+    val txsAll by vm.transactions.collectAsStateWithLifecycle()
+    val paymentsAll by vm.payments.collectAsStateWithLifecycle()
+    // ضدکرش: در یک LazyColumn کلیدها باید در «کل» لیست یکتا باشند؛ تراکنش و پرداخت
+    // دو جدول مستقل‌اند و ممکن است id برابر داشته باشند (مثلاً هر دو ۴).
+    val txs = remember(txsAll) { txsAll.distinctBy { it.tx.id } }
+    val payments = remember(paymentsAll) { paymentsAll.distinctBy { it.payment.id } }
     val message by vm.message.collectAsStateWithLifecycle()
     val settings by app.settings.flow.collectAsStateWithLifecycle(ir.bedehyar.app.data.AppSettings())
     val rial = settings.currencyRial
@@ -210,13 +214,13 @@ fun PersonScreen(
             } else {
                 if (txs.isNotEmpty()) {
                     item { SectionTitle("تراکنش‌ها") }
-                    items(txs, key = { it.tx.id }) { t ->
+                    items(txs, key = { "tx-" + it.tx.id }) { t ->
                         TxRow(t, rial) { onOpenTx(t.tx.id) }
                     }
                 }
                 if (payments.isNotEmpty()) {
                     item { SectionTitle("پرداخت‌ها") }
-                    items(payments, key = { it.payment.id }) { pw ->
+                    items(payments, key = { "pay-" + it.payment.id }) { pw ->
                         Card(
                             Modifier
                                 .fillMaxWidth()

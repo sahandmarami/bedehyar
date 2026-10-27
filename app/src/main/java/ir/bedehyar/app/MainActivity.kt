@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     // اگر خطای مرگبار قبلی ثبت شده باشد، ابتدا گزارش آن نشان داده
                     // می‌شود تا حتی در حالت کرش‌لقپ هم قابل خواندن/کپی باشد.
-                    var crashReport by remember { mutableStateOf(CrashReporter.lastCrash(app)) }
+                    var crashReport by remember { mutableStateOf(CrashReporter.lastCrashForCurrentVersion(app)) }
                     if (crashReport != null) {
                         CrashReportDialog(
                             text = crashReport.orEmpty(),

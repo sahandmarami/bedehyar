@@ -24,6 +24,7 @@ object CrashReporter {
                 e.printStackTrace(PrintWriter(sw))
                 val text = buildString {
                     appendLine("زمان: " + System.currentTimeMillis())
+                    appendLine("نسخه: " + appVersion(appContext))
                     appendLine("پردازه: " + thread.name)
                     appendLine(sw.toString())
                 }
@@ -43,6 +44,29 @@ object CrashReporter {
         } catch (_: Throwable) {
             null
         }
+    }
+
+    /**
+     * گزارش کرش فقط وقتی نشان داده می‌شود که از همین نسخه نصب‌شده باشد؛
+     * گزارش نسخه‌های قبلی (مثلاً بعد از آپدیت) خودکار پاک می‌شود تا کاربر
+     * فکر نکند برنامه هنوز خراب است.
+     */
+    fun lastCrashForCurrentVersion(context: Context): String? {
+        val text = lastCrash(context) ?: return null
+        val versionLine = text.lineSequence()
+            .firstOrNull { it.startsWith("نسخه: ") }
+            ?.trim()
+            // فایل بدون خط نسخه = مربوط به نسخه‌های قبل از این قابلیت
+            ?: return null.also { clear(context) }
+        return if (versionLine == "نسخه: " + appVersion(context)) text
+        else null.also { clear(context) }
+    }
+
+    private fun appVersion(context: Context): String = try {
+        val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+        "${pi.versionCode} (${pi.versionName})"
+    } catch (_: Throwable) {
+        "?"
     }
 
     fun clear(context: Context) {
